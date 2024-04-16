@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A template for setting up database 
+
+Parameters:
+  # Default settings
+  ProjectName:
+    Type: String
+    Default: gi
+  
+  # DB setup
+  EngineType:
+    Type: String 
+    Default: mariadb
+
+  MasterUsername:
+    Type: String 
+    Default: admin
+
+  MasterUserPassword:
+    Type: String 
+    Default: admin-password
+  
+  DBInstanceClass:
+    Type: String 
+    Default: db.t3.micro
+  
+  AllocatedStorage:
+    Type: Number 
+    Default: 20
+
+Resources:
+  DBSubnet:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: DB subnet group for db instances 
+      SubnetIds: 
+        - !ImportValue DPSubnet1
+        - !ImportValue DPSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-db-subnetgroup 
+
+  DB:
+    Type: AWS::RDS::DBInstance
+    DependsOn: 
+      - DBSubnet
+    Properties:
+      AllocatedStorage: !Ref AllocatedStorage 
+      DBInstanceIdentifier: !Sub ${ProjectName}-db
+      AutoMinorVersionUpgrade: false
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: !Ref EngineType
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref MasterUserPassword
+      DBSubnetGroupName: !Ref DBSubnet
+      VPCSecurityGroups:
+        - !ImportValue DBSG
