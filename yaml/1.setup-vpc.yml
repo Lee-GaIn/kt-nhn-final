@@ -5,7 +5,6 @@ Parameters:
   # Default settings
   ProjectName:
     Type: String
-    Default: gi
 
   # VPC and AZ
   VPCCidr:
@@ -90,7 +89,7 @@ Resources:
       AvailabilityZone: !Ref AZ2
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-private-subnet2
+          Value: !Sub ${ProjectName}-public-subnet2
 
   ##########################
   # Set up the six private subnets
@@ -139,27 +138,27 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-private-subnet4
 
-  PrivateSubnet5:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      MapPublicIpOnLaunch: false
-      CidrBlock: !Ref PrivateSubnet5Cidr
-      AvailabilityZone: !Ref AZ1
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-private-subnet5
+  # PrivateSubnet5:
+  #   Type: AWS::EC2::Subnet
+  #   Properties:
+  #     VpcId: !Ref VPC
+  #     MapPublicIpOnLaunch: false
+  #     CidrBlock: !Ref PrivateSubnet5Cidr
+  #     AvailabilityZone: !Ref AZ1
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${ProjectName}-private-subnet5
 
-  PrivateSubnet6:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      MapPublicIpOnLaunch: false
-      CidrBlock: !Ref PrivateSubnet6Cidr
-      AvailabilityZone: !Ref AZ2
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-private-subnet6
+  # PrivateSubnet6:
+  #   Type: AWS::EC2::Subnet
+  #   Properties:
+  #     VpcId: !Ref VPC
+  #     MapPublicIpOnLaunch: false
+  #     CidrBlock: !Ref PrivateSubnet6Cidr
+  #     AvailabilityZone: !Ref AZ2
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${ProjectName}-private-subnet6
 
   ##########################
   # Set up the an IGW
@@ -274,19 +273,19 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref PrivateSubnet4
 
-  # Associate the private subnet5 with the private route table
-  PrivateRouteTableAssociation5:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      SubnetId: !Ref PrivateSubnet5
+  # # Associate the private subnet5 with the private route table
+  # PrivateRouteTableAssociation5:
+  #   Type: AWS::EC2::SubnetRouteTableAssociation
+  #   Properties:
+  #     RouteTableId: !Ref PrivateRouteTable
+  #     SubnetId: !Ref PrivateSubnet5
 
-  # Associate the private subnet6 with the private route table
-  PrivateRouteTableAssociation6:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      SubnetId: !Ref PrivateSubnet6
+  # # Associate the private subnet6 with the private route table
+  # PrivateRouteTableAssociation6:
+  #   Type: AWS::EC2::SubnetRouteTableAssociation
+  #   Properties:
+  #     RouteTableId: !Ref PrivateRouteTable
+  #     SubnetId: !Ref PrivateSubnet6
 
   ##########################
   # Set up the security groups
@@ -320,29 +319,29 @@ Resources:
           ToPort: 80
           SourceSecurityGroupId: !GetAtt ALBSG.GroupId
 
-  NLBSG:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub ${ProjectName}-nlb-sg
-      GroupDescription: Enable access from the WEB servers
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !GetAtt WEBSG.GroupId
+  # NLBSG:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupName: !Sub ${ProjectName}-nlb-sg
+  #     GroupDescription: Enable access from the WEB servers
+  #     VpcId: !Ref VPC
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 80
+  #         ToPort: 80
+  #         SourceSecurityGroupId: !GetAtt WEBSG.GroupId
 
-  WASSG:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub ${ProjectName}-was-sg
-      GroupDescription: Enable access from the NLB
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !GetAtt NLBSG.GroupId
+  # WASSG:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupName: !Sub ${ProjectName}-was-sg
+  #     GroupDescription: Enable access from the NLB
+  #     VpcId: !Ref VPC
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 80
+  #         ToPort: 80
+  #         SourceSecurityGroupId: !GetAtt NLBSG.GroupId
 
   DBSG:
     Type: AWS::EC2::SecurityGroup
@@ -354,7 +353,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !GetAtt WASSG.GroupId
+          SourceSecurityGroupId: !GetAtt WEBSG.GroupId
 
 Outputs:
   # VPC
@@ -387,22 +386,22 @@ Outputs:
   PrivateSub3:
     Value: !Ref PrivateSubnet3
     Export:
-      Name: WASSubnet1
+      Name: DBSubnet1
 
   PrivateSub4:
     Value: !Ref PrivateSubnet4
     Export:
-      Name: WASSubnet2
+      Name: DBSubnet2
 
-  PrivateSub5:
-    Value: !Ref PrivateSubnet5
-    Export:
-      Name: DPSubnet1
+  # PrivateSub5:
+  #   Value: !Ref PrivateSubnet5
+  #   Export:
+  #     Name: WASSubnet1
 
-  PrivateSub6:
-    Value: !Ref PrivateSubnet6
-    Export:
-      Name: DPSubnet2
+  # PrivateSub6:
+  #   Value: !Ref PrivateSubnet6
+  #   Export:
+  #     Name: WASSubnet2
 
   # Security Groups
   ALBSG:
@@ -415,15 +414,15 @@ Outputs:
     Export:
       Name: WEBSG
 
-  NLBSG:
-    Value: !Ref NLBSG
-    Export:
-      Name: NLBSG
+  # NLBSG:
+  #   Value: !Ref NLBSG
+  #   Export:
+  #     Name: NLBSG
 
-  WASSG:
-    Value: !Ref WASSG
-    Export:
-      Name: WASSG
+  # WASSG:
+  #   Value: !Ref WASSG
+  #   Export:
+  #     Name: WASSG
 
   DBSG:
     Value: !Ref DBSG

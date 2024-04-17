@@ -5,8 +5,7 @@ Parameters:
   # Default settings
   ProjectName:
     Type: String
-    Default: gi
-  
+
   # DB setup
   EngineType:
     Type: String 
@@ -28,14 +27,18 @@ Parameters:
     Type: Number 
     Default: 20
 
+  DBName:
+    Type: String 
+    Default: MyPlaylist
+
 Resources:
   DBSubnet:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: DB subnet group for db instances 
       SubnetIds: 
-        - !ImportValue DPSubnet1
-        - !ImportValue DPSubnet2
+        - !ImportValue DBSubnet1
+        - !ImportValue DBSubnet2
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-db-subnetgroup 
@@ -55,3 +58,26 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnet
       VPCSecurityGroups:
         - !ImportValue DBSG
+      DBName: !Ref DBName
+
+Outputs: 
+  Endpoint:
+    Value: !GetAtt DB.Endpoint.Address
+    Export:
+      Name: DBEndpoint
+
+  Username:
+    Value: !Ref MasterUsername
+    Export:
+      Name: DBUsername
+
+  PWD:
+    Value: !Ref MasterUserPassword
+    Export:
+      Name: DBPWD
+
+
+  DBName:
+    Value: !Ref DBName
+    Export:
+      Name: DBName

@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A template for setting up parameters on the parameter store
+
+Resources:
+  EndpointParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /MyPlaylist/endPoint
+      Description: The endpoint URL of the database
+      Type: String
+      Value: !ImportValue DBEndpoint 
+
+  UsernameParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /MyPlaylist/userName
+      Description: The username of the database
+      Type: String
+      Value: !ImportValue DBUsername 
+
+  PWDParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /MyPlaylist/pwd
+      Description: Password of the database
+      Type: String
+      Value: !ImportValue DBPWD 
+
+  DBNameParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /MyPlaylist/dbName
+      Description: The name of the database
+      Type: String
+      Value: !ImportValue DBName 

@@ -1,25 +1,28 @@
 1. IAM role for CLI - DONE
 2. setup_vpc.yml - DONE 
 3. setup_db.yml - DONE 
+4. setup_params.yml - DONE 
+5. setup_web
 
 
 (수)
+web was auto scaling 
+
+
+(목)
 db data 생성
 db data 옮기기
 website 생성 
 
 
-(목)
-web was auto scaling <- website 파일 넣기 
-
 (금)
 ci/cd 
-
-(토)
-귀가 있고 수염있는 고양이 이름 지어주기
-
 
 
 - sh 자동으로 할 수 있도록 
 + spotify API 사용 
 
+
+# 주의사항 
+- 프로젝트 이름 
+- AMI id 

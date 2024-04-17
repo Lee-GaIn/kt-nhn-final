@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A template for setting up web servers
+
+Parameters:
+  # Default settings
+  ProjectName:
+    Type: String
+  
+  InstanceType:
+    Type: String 
+    Default: t2.micro
+  
+  ImageId:
+    Type: String 
+
+Resources:
+##########################
+# Set a target group 
+##########################
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${ProjectName}-tg
+      Port: 80
+      Protocol: HTTP
+      VpcId: !ImportValue VPC
+      HealthCheckPath: /
+
+##########################
+# Set an ALB
+##########################
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${ProjectName}-alb
+      Scheme: internet-facing 
+      Type: application
+      Subnets:
+        - !ImportValue WebSubnet1
+        - !ImportValue WebSubnet2
+      SecurityGroups: 
+        - !ImportValue ALBSG
+      
+# Mappings 
+
+##########################
+# Set a listener
+##########################
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward 
+          TargetGroupArn: !GetAtt TargetGroup.TargetGroupArn
+      LoadBalancerArn: !GetAtt ALB.LoadBalancerArn
+      Port: 80
+      Protocol: HTTP
+
+##########################
+# Set up the IAM role
+##########################
+  WebServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-web-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonRDSDataFullAccess
+
+##########################
+# Set up the auto scaling group 
+##########################
+  IamInstanceProfile:
+    DependsOn:
+      - WebServerRole
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub ${ProjectName}-profile
+      Roles:
+        - !Sub ${ProjectName}-web-role
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${ProjectName}-web-template
+      LaunchTemplateData: 
+        InstanceType: !Ref InstanceType
+        ImageId: !Ref ImageId  
+        SecurityGroupIds: 
+          - !ImportValue WEBSG
+        # BlockDeviceMappings: 
+        #   - Ebs:
+        #       VolumeSize: !Ref EBSVolumeSize
+        #       VolumeType: !Ref EBSVolumeType
+        #       DeleteOnTermination: true # set false, for prod
+        #       Encrypted: true
+        #     DeviceName: /dev/xvdcz
+        IamInstanceProfile:
+          Arn: !GetAtt IamInstanceProfile.Arn
+        Monitoring: 
+          Enabled: true
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            # Install libs
+            sudo yum -y update 
+            sudo amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+            sudo yum install -y httpd
+
+            # Get source code
+            sudo yum install git 
+            sudo git init 
+            sudo git clone https://github.com/Lee-GaIn/CA_Playlist
+            cd CA_Playlist/
+            sudo unzip Playlist.zip -d /var/www/html
+            sudo chown -R ec2-user:ec2-user /var/www/html
+
+            # Start web server
+            sudo service httpd start
+
+  AutoScalingGroup:
+    DependsOn:
+      - LaunchTemplate
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub ${ProjectName}-autoscaling
+      LaunchTemplate:
+        LaunchTemplateName: !Sub ${ProjectName}-web-template
+        Version: 1  
+      MinSize: 0
+      MaxSize: 1
+      DesiredCapacity: 1 
+      AvailabilityZones:
+        - !Join ['', [!Sub '${AWS::Region}a']]
+        - !Join ['', [!Sub '${AWS::Region}b']]
+      VPCZoneIdentifier:
+        - !ImportValue WebSubnet1
+        - !ImportValue WebSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-web
+          PropagateAtLaunch: true
+
+
+
+
+
+
+
+
+
+
+
+
