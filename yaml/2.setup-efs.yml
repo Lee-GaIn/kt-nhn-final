@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A template for setting up the EFS
+
+Parameters:
+  # Default settings
+  ProjectName:
+    Type: String
+  
+  MountPointPath:
+    Type: String 
+    Default: /efs
+
+Resources:
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      PerformanceMode: generalPurpose
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub ${ProjectName}-efs
+
+  MountTargetToWebAZ1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !ImportValue DBSubnet1
+      SecurityGroups: 
+        - !ImportValue EFSSG
+
+  MountTargetToWebAZ2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !ImportValue DBSubnet2
+      SecurityGroups: 
+        - !ImportValue EFSSG
+
+  AccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      AccessPointTags: 
+        - Key: Name
+          Value: !Ref MountPointPath
+      FileSystemId: !Ref FileSystem
+      RootDirectory:
+        Path: !Ref MountPointPath
+
+Outputs:
+  FileSystemId:
+    Description: File system ID
+    Value: !Ref FileSystem
+    Export:
+      Name: FileSystemId
+
+  MountPointPath:
+    Description: The path of mount point 
+    Value: !Ref MountPointPath
+    Export: 
+      Name: MountPointPath
+
+  FileSystemArn: 
+    Value: !GetAtt FileSystem.Arn
+    Export:
+      Name: FileSystemArn

@@ -12,6 +12,10 @@ Parameters:
   
   ImageId:
     Type: String 
+  
+  KeyName:
+    Type: String 
+    Default: web
 
 Resources:
 ##########################
@@ -20,11 +24,13 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
+      IpAddressType: ipv4
       Name: !Sub ${ProjectName}-tg
       Port: 80
       Protocol: HTTP
       VpcId: !ImportValue VPC
-      HealthCheckPath: /
+      HealthCheckPath: /index.php
+      TargetType: instance
 
 ##########################
 # Set an ALB
@@ -33,13 +39,15 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub ${ProjectName}-alb
+      IpAddressType: ipv4
       Scheme: internet-facing 
-      Type: application
-      Subnets:
-        - !ImportValue WebSubnet1
-        - !ImportValue WebSubnet2
       SecurityGroups: 
         - !ImportValue ALBSG
+      Subnets:
+        - !ImportValue PublicSubnet1
+        - !ImportValue PublicSubnet2
+      Type: application
+
       
 # Mappings 
 
@@ -71,7 +79,9 @@ Resources:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonRDSDataFullAccess
+        - arn:aws:iam::aws:policy/AmazonRDSDataFullAccess #TODO
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSCloudFormationReadOnlyAccess
 
 ##########################
 # Set up the auto scaling group 
@@ -85,60 +95,50 @@ Resources:
       Roles:
         - !Sub ${ProjectName}-web-role
 
-  LaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      LaunchTemplateName: !Sub ${ProjectName}-web-template
-      LaunchTemplateData: 
-        InstanceType: !Ref InstanceType
-        ImageId: !Ref ImageId  
-        SecurityGroupIds: 
-          - !ImportValue WEBSG
-        # BlockDeviceMappings: 
-        #   - Ebs:
-        #       VolumeSize: !Ref EBSVolumeSize
-        #       VolumeType: !Ref EBSVolumeType
-        #       DeleteOnTermination: true # set false, for prod
-        #       Encrypted: true
-        #     DeviceName: /dev/xvdcz
-        IamInstanceProfile:
-          Arn: !GetAtt IamInstanceProfile.Arn
-        Monitoring: 
-          Enabled: true
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            # Install libs
-            sudo yum -y update 
-            sudo amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
-            sudo yum install -y httpd
+      LaunchConfigurationName: !Sub ${ProjectName}-web-template
+      KeyName: !Ref KeyName
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref ImageId  
+      SecurityGroups: 
+        - !ImportValue WEBSG
+      IamInstanceProfile: !GetAtt IamInstanceProfile.Arn
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Import FileSystemId and MountPointPath from setup-efs stack
+          FileSystemId=$(aws cloudformation describe-stacks --stack-name setup-efs --query "Stacks[0].Outputs[?OutputKey=='FileSystemId'].OutputValue" --output text)
+          MountPointPath=$(aws cloudformation describe-stacks --stack-name setup-efs --query "Stacks[0].Outputs[?OutputKey=='MountPointPath'].OutputValue" --output text)
 
-            # Get source code
-            sudo yum install git 
-            sudo git init 
-            sudo git clone https://github.com/Lee-GaIn/CA_Playlist
-            cd CA_Playlist/
-            sudo unzip Playlist.zip -d /var/www/html
-            sudo chown -R ec2-user:ec2-user /var/www/html
+          # EFS mount 
+          mkdir -p "${MountPointPath}"
+          mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport "${FileSystemId}.efs.us-west-2.amazonaws.com:/" "${MountPointPath}"
 
-            # Start web server
-            sudo service httpd start
+          # Install libs
+          sudo yum -y update 
+          sudo yum install -y httpd
+
+          # Start web server
+          sudo systemctl start httpd
+          sudo systemctl enable httpd
+
+
+
 
   AutoScalingGroup:
     DependsOn:
-      - LaunchTemplate
+      - LaunchConfiguration
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub ${ProjectName}-autoscaling
-      LaunchTemplate:
-        LaunchTemplateName: !Sub ${ProjectName}-web-template
-        Version: 1  
-      MinSize: 0
+      MinSize: 1
       MaxSize: 1
       DesiredCapacity: 1 
-      AvailabilityZones:
-        - !Join ['', [!Sub '${AWS::Region}a']]
-        - !Join ['', [!Sub '${AWS::Region}b']]
+      LaunchConfigurationName: !Sub ${ProjectName}-web-template
+      TargetGroupARNs:
+        - !Ref TargetGroup
       VPCZoneIdentifier:
         - !ImportValue WebSubnet1
         - !ImportValue WebSubnet2

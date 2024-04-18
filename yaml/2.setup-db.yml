@@ -35,13 +35,11 @@ Resources:
   DBSubnet:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
+      DBSubnetGroupName: !Sub ${ProjectName}-db-subnetgroup 
       DBSubnetGroupDescription: DB subnet group for db instances 
       SubnetIds: 
         - !ImportValue DBSubnet1
         - !ImportValue DBSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-db-subnetgroup 
 
   DB:
     Type: AWS::RDS::DBInstance

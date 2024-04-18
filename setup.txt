@@ -1,21 +1,22 @@
 1. IAM role for CLI - DONE
+2. create a SSH key pair for web servers
 2. setup_vpc.yml - DONE 
 3. setup_db.yml - DONE 
 4. setup_params.yml - DONE 
 5. setup_web
 
-
-(수)
-web was auto scaling 
-
-
 (목)
+efs 
+web server 
+was server  
+
+
+(금)
 db data 생성
 db data 옮기기
 website 생성 
 
-
-(금)
+(월)
 ci/cd 
 
 
@@ -26,3 +27,10 @@ ci/cd
 # 주의사항 
 - 프로젝트 이름 
 - AMI id 
+
+### 꼭 지울 것 ### 
+test ec2 template 
+test vpc subnet igw router table 
+bastionhost sg 
+test ec2 sg
+test IAM role
