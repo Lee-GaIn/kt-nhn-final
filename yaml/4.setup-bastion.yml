@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A template for setting up a bastion host
+
+Parameters:
+  # Default settings
+  ProjectName:
+    Type: String
+
+  InstanceType:
+    Type: String 
+    Default: t2.micro
+  
+  ImageId:
+    Type: String 
+  
+  KeyName:
+    Type: String 
+    Default: web
+
+  AmazonLinuxAMIID:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Resources:
+##########################
+# Set up the IAM role
+##########################
+  BastionHostRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-bastion-host-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonRDSDataFullAccess
+
+  IamInstanceProfile:
+    DependsOn:
+      - BastionHostRole
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub ${ProjectName}-bastion-host-profile
+      Roles:
+        - !Sub ${ProjectName}-bastion-host-role
+
+##########################
+# Set up the bastion host instance
+##########################
+  BastionHostInstance: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: !Ref AmazonLinuxAMIID
+      KeyName: !Ref KeyName
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref IamInstanceProfile
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: 
+            - !ImportValue BastionHostSG
+          SubnetId: !ImportValue PublicSubnet1
+      UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+
+            # Install libs
+            sudo yum -y update 
+            sudo yum install -y git mariadb
+
+            # Get the source code 
+            sudo git clone https://github.com/Lee-GaIn/php-sample-code
+
+            # Move the source code to EFS 
+            cd ./php-sample-code/Playlist
+            sudo mv * ../../
+
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-bastion-host
+          
+Outputs:
+  BastionHostIP:
+    Description: The public IP address of the bastion host
+    Value: !Sub ${BastionHostInstance.PublicIp}

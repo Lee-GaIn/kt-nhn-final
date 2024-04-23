@@ -11,14 +11,15 @@ Parameters:
     Type: String 
     Default: mariadb
 
-  MasterUsername:
+  DBUsername:
     Type: String 
-    Default: admin
 
-  MasterUserPassword:
+  DBUserPassword:
     Type: String 
-    Default: admin-password
   
+  DBName:
+    Type: String 
+
   DBInstanceClass:
     Type: String 
     Default: db.t3.micro
@@ -26,10 +27,6 @@ Parameters:
   AllocatedStorage:
     Type: Number 
     Default: 20
-
-  DBName:
-    Type: String 
-    Default: MyPlaylist
 
 Resources:
   DBSubnet:
@@ -51,29 +48,28 @@ Resources:
       AutoMinorVersionUpgrade: false
       DBInstanceClass: !Ref DBInstanceClass
       Engine: !Ref EngineType
-      MasterUsername: !Ref MasterUsername
-      MasterUserPassword: !Ref MasterUserPassword
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBUserPassword
       DBSubnetGroupName: !Ref DBSubnet
       VPCSecurityGroups:
         - !ImportValue DBSG
       DBName: !Ref DBName
 
 Outputs: 
-  Endpoint:
+  DBEndpoint:
     Value: !GetAtt DB.Endpoint.Address
     Export:
       Name: DBEndpoint
 
-  Username:
-    Value: !Ref MasterUsername
+  DBUsername:
+    Value: !Ref DBUsername
     Export:
       Name: DBUsername
 
-  PWD:
-    Value: !Ref MasterUserPassword
+  DBUserPassword:
+    Value: !Ref DBUserPassword
     Export:
-      Name: DBPWD
-
+      Name: DBUserPassword
 
   DBName:
     Value: !Ref DBName

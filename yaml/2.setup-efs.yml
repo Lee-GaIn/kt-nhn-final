@@ -8,7 +8,7 @@ Parameters:
   
   MountPointPath:
     Type: String 
-    Default: /efs
+    Default: /mnt/efs
 
 Resources:
   FileSystem:
@@ -58,7 +58,7 @@ Outputs:
     Export: 
       Name: MountPointPath
 
-  FileSystemArn: 
-    Value: !GetAtt FileSystem.Arn
+  AccessPointArn: 
+    Value: !GetAtt AccessPoint.Arn
     Export:
-      Name: FileSystemArn
+      Name: AccessPointArn

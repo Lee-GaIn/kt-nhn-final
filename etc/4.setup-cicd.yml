@@ -7,9 +7,9 @@ Parameters:
     Type: String
 
 Resources:
-  ##########################
-  # Set up a VPC endpoint
-  ##########################
+##########################
+# Set up a VPC endpoint
+##########################
   Endpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -18,25 +18,9 @@ Resources:
       ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
       VpcId: !ImportValue VPC
 
-  ##########################
-  # Set up a S3 source bucket
-  ##########################
-  SourceCodeBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    Properties:
-      BucketName: !Sub ${ProjectName}-source
-      VersioningConfiguration: 
-        Status: Enabled
-      PublicAccessBlockConfiguration: 
-        BlockPublicAcls: True
-        BlockPublicPolicy: True
-        IgnorePublicAcls: True
-        RestrictPublicBuckets: True
-
-  ##########################
-  # Set up an IAM role for a lambda function
-  ##########################
+##########################
+# Set up an IAM role for a lambda function
+##########################
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -59,15 +43,15 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
         - arn:aws:iam::aws:policy/AmazonElasticFileSystemClientFullAccess
 
- ##########################
-  # Set up a security group for a lambda function
-  ##########################
+##########################
+# Set up a security group for a lambda function
+##########################
   LambdaSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub ${ProjectName}-cicd-lambda-sg
       GroupDescription: Enable access from the NFS protocol to lambda function
-      VpcId: !Ref VPC
+      VpcId: !ImportValue VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 2049
@@ -77,9 +61,9 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-cicd-lambda-sg
 
-  ##########################
-  # Set up the lambda function
-  ##########################
+##########################
+# Set up the lambda function
+##########################
   LambdaFunction:
       Type: AWS::Lambda::Function
       Properties:
@@ -88,15 +72,9 @@ Resources:
         Runtime: python3.9
         Handler: index.lambda_handler
         FileSystemConfigs: 
-          - Arn:
-            LocalMountPath: !Sub /mnt/${FileSystemPath}
+          - Arn: !ImportValue AccessPointArn
+            LocalMountPath: !ImportValue MountPointPath
         Timeout: 60 
-        Events:
-          S3Bucket:
-            Type: S3
-            Properties:
-              Bucket: !Ref SourceCodeBucket
-              Events: 's3:ObjectCreated:*'
         VpcConfig:
           SecurityGroupIds: 
             - !GetAtt LambdaSG.GroupId
@@ -143,25 +121,22 @@ Resources:
                     'body': 'File downloaded and moved successfully'
                 }
 
-
-
-# ADD FILE SYSTEM CONNECTION 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+##########################
+# Set up a S3 source bucket
+##########################
+  SourceCodeBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub ${ProjectName}-source
+      VersioningConfiguration: 
+        Status: Enabled
+      PublicAccessBlockConfiguration: 
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      NotificationConfiguration:
+        LambdaConfigurations:
+        - Event: 's3:ObjectCreated:*'
+          Function: !GetAtt LambdaFunction.Arn

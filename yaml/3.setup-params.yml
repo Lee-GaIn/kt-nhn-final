@@ -24,7 +24,7 @@ Resources:
       Name: /MyPlaylist/pwd
       Description: Password of the database
       Type: String
-      Value: !ImportValue DBPWD 
+      Value: !ImportValue DBUserPassword 
 
   DBNameParam:
     Type: AWS::SSM::Parameter

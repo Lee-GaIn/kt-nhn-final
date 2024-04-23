@@ -307,6 +307,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-bastion-host-sg
+          
   ALBSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -325,7 +326,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-alb-sg
-      # #TODO! SecurityGroupEgress:
 
   WEBSG:
     Type: AWS::EC2::SecurityGroup
@@ -334,6 +334,10 @@ Resources:
       GroupDescription: Enable access from the ALB
       VpcId: !Ref VPC
       SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !GetAtt BastionHostSG.GroupId
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
@@ -353,6 +357,10 @@ Resources:
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !GetAtt WEBSG.GroupId
+        - IpProtocol: tcp
+          FromPort: 9000
+          ToPort: 9000
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-nlb-sg
@@ -365,9 +373,17 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !GetAtt BastionHostSG.GroupId
+        - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !GetAtt NLBSG.GroupId
+        - IpProtocol: tcp
+          FromPort: 9000
+          ToPort: 9000
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-was-sg
@@ -382,11 +398,11 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !GetAtt WEBSG.GroupId
+          SourceSecurityGroupId: !GetAtt BastionHostSG.GroupId
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !GetAtt BastionHostSG.GroupId
+          SourceSecurityGroupId: !GetAtt WEBSG.GroupId
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
@@ -413,16 +429,105 @@ Resources:
         - IpProtocol: tcp
           FromPort: 2049
           ToPort: 2049
-          CidrIp: !Ref PrivateSubnet5Cidr
-        - IpProtocol: tcp
-          FromPort: 2049
-          ToPort: 2049
-          CidrIp: !Ref PrivateSubnet6Cidr
+          SourceSecurityGroupId: !GetAtt BastionHostSG.GroupId
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-efs-sg
 
+  ##########################
+  # Set a target group 
+  ##########################
+  NLBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      IpAddressType: ipv4
+      Name: !Sub ${ProjectName}-was-tg
+      Port: 9000
+      Protocol: TCP
+      VpcId: !Ref VPC
+      TargetType: instance
 
+  ##########################
+  # Set an NLB
+  ##########################
+  NLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${ProjectName}-nlb
+      IpAddressType: ipv4
+      Scheme: internal
+      SecurityGroups: 
+        - !Ref NLBSG
+      Subnets:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Type: network
+
+  ##########################
+  # Set a listener
+  ##########################
+  NLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward 
+          TargetGroupArn: !GetAtt NLBTargetGroup.TargetGroupArn
+      LoadBalancerArn: !GetAtt NLB.LoadBalancerArn
+      Port: 80
+      Protocol: TCP
+
+  NLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward 
+          TargetGroupArn: !GetAtt NLBTargetGroup.TargetGroupArn
+      LoadBalancerArn: !GetAtt NLB.LoadBalancerArn
+      Port: 9000
+      Protocol: TCP
+
+  ##########################
+  # Set a target group 
+  ##########################
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      IpAddressType: ipv4
+      Name: !Sub ${ProjectName}-web-tg
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /index.php
+      TargetType: instance
+
+  ##########################
+  # Set an ALB
+  ##########################
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${ProjectName}-alb
+      IpAddressType: ipv4
+      Scheme: internet-facing 
+      SecurityGroups: 
+        - !Ref ALBSG
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Type: application
+
+  ##########################
+  # Set a listener
+  ##########################
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward 
+          TargetGroupArn: !GetAtt ALBTargetGroup.TargetGroupArn
+      LoadBalancerArn: !GetAtt ALB.LoadBalancerArn
+      Port: 80
+      Protocol: HTTP
 
 
 Outputs:
@@ -474,6 +579,11 @@ Outputs:
       Name: WasSubnet2
 
   # Security Groups
+  BastionHostSG:
+    Value: !Ref BastionHostSG
+    Export:
+      Name: BastionHostSG
+
   ALBSG:
     Value: !Ref ALBSG
     Export:
@@ -514,3 +624,21 @@ Outputs:
     Value: !Ref PrivateRouteTable
     Export:
       Name: PrivateRouteTable
+
+  # ELB 
+  NLB:
+    Value: !GetAtt NLB.DNSName
+    Export:
+      Name: NLBDNS
+
+  # Target Group 
+  ALBTargetGroup:
+    Value: !GetAtt ALBTargetGroup.TargetGroupArn
+    Export:
+      Name: ALBTargetGroupArn
+
+
+  NLBTargetGroup:
+    Value: !GetAtt NLBTargetGroup.TargetGroupArn
+    Export:
+      Name: NLBTargetGroupArn

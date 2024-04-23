@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A template for setting up was servers
+
+Parameters:
+  # Default settings
+  ProjectName:
+    Type: String
+  
+  InstanceType:
+    Type: String 
+    Default: t2.micro
+  
+  ImageId:
+    Type: String 
+  
+  KeyName:
+    Type: String 
+    Default: web
+
+  EFSFileSystemId: 
+    Type: String 
+
+  EfsDns: 
+    Type: String 
+
+Resources:
+
+##########################
+# Set up the IAM role
+##########################
+  WasServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-was-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonRDSDataFullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSCloudFormationReadOnlyAccess
+
+##########################
+# Set up the auto scaling group 
+##########################
+  IamInstanceProfile:
+    DependsOn:
+      - WasServerRole
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub ${ProjectName}-was-profile
+      Roles:
+        - !Sub ${ProjectName}-was-role
+
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      LaunchConfigurationName: !Sub ${ProjectName}-was-template
+      KeyName: !Ref KeyName
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref ImageId  
+      SecurityGroups: 
+        - !ImportValue WASSG
+      IamInstanceProfile: !GetAtt IamInstanceProfile.Arn
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+
+          # Install libs
+          sudo yum install -y php-fpm php-mysqlnd
+
+          # Enable php 
+          sudo systemctl enable --now php-fpm
+
+          echo -e "[www]\nuser = nginx\ngroup = nginx\n\nlisten = 9000\nlisten.owner = nginx\nlisten.group = nginx\n\npm = dynamic\npm.max_children = 30\npm.start_servers = 5\npm.min_spare_servers = 5\npm.max_spare_servers = 10\npm.max_requests = 500" | sudo tee /etc/php-fpm.d/www.conf
+
+          # Mount 
+          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${EfsDns}:/ /usr/share/nginx/html
+
+          sudo systemctl restart php-fpm
+
+  AutoScalingGroup:
+    DependsOn:
+      - LaunchConfiguration
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub ${ProjectName}-was-autoscaling
+      MinSize: 1
+      MaxSize: 1
+      DesiredCapacity: 1 
+      LaunchConfigurationName: !Sub ${ProjectName}-was-template
+      TargetGroupARNs:
+        - !ImportValue NLBTargetGroupArn
+      VPCZoneIdentifier:
+        - !ImportValue WasSubnet1
+        - !ImportValue WasSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-was
+          PropagateAtLaunch: true
+
+
+
+
+
+
+
+
+
+

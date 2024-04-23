@@ -34,3 +34,17 @@ test vpc subnet igw router table
 bastionhost sg 
 test ec2 sg
 test IAM role
+
+
+## 예상 오류 ## 
+1. setup-efs aws cli 로 mount point 가져올 때. D: 로 시작하는 path 로 됨
+2. /efs 가 맞는지 /mnt/efs 가 맞는지 모르겠음 
+
+
+## efs ## 
+1. dir 만들고 
+2. dir mount 
+3. dir 에 src code mv 
+
+
+

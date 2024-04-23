@@ -17,53 +17,16 @@ Parameters:
     Type: String 
     Default: web
 
+  EFSFileSystemId: 
+    Type: String 
+
+  NlbDns: 
+    Type: String 
+
+  EfsDns: 
+    Type: String 
+
 Resources:
-##########################
-# Set a target group 
-##########################
-  TargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      IpAddressType: ipv4
-      Name: !Sub ${ProjectName}-tg
-      Port: 80
-      Protocol: HTTP
-      VpcId: !ImportValue VPC
-      HealthCheckPath: /index.php
-      TargetType: instance
-
-##########################
-# Set an ALB
-##########################
-  ALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub ${ProjectName}-alb
-      IpAddressType: ipv4
-      Scheme: internet-facing 
-      SecurityGroups: 
-        - !ImportValue ALBSG
-      Subnets:
-        - !ImportValue PublicSubnet1
-        - !ImportValue PublicSubnet2
-      Type: application
-
-      
-# Mappings 
-
-##########################
-# Set a listener
-##########################
-  Listener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward 
-          TargetGroupArn: !GetAtt TargetGroup.TargetGroupArn
-      LoadBalancerArn: !GetAtt ALB.LoadBalancerArn
-      Port: 80
-      Protocol: HTTP
-
 ##########################
 # Set up the IAM role
 ##########################
@@ -91,7 +54,7 @@ Resources:
       - WebServerRole
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub ${ProjectName}-profile
+      InstanceProfileName: !Sub ${ProjectName}-web-profile
       Roles:
         - !Sub ${ProjectName}-web-role
 
@@ -107,24 +70,20 @@ Resources:
       IamInstanceProfile: !GetAtt IamInstanceProfile.Arn
       UserData:
         Fn::Base64: !Sub |
-          #!/bin/bash
-          # Import FileSystemId and MountPointPath from setup-efs stack
-          FileSystemId=$(aws cloudformation describe-stacks --stack-name setup-efs --query "Stacks[0].Outputs[?OutputKey=='FileSystemId'].OutputValue" --output text)
-          MountPointPath=$(aws cloudformation describe-stacks --stack-name setup-efs --query "Stacks[0].Outputs[?OutputKey=='MountPointPath'].OutputValue" --output text)
-
-          # EFS mount 
-          mkdir -p "${MountPointPath}"
-          mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport "${FileSystemId}.efs.us-west-2.amazonaws.com:/" "${MountPointPath}"
-
+          #!/bin/bash -xe
+          
           # Install libs
-          sudo yum -y update 
-          sudo yum install -y httpd
+          sudo yum install -y nginx
 
-          # Start web server
-          sudo systemctl start httpd
-          sudo systemctl enable httpd
+          # Enable web server
+          sudo systemctl enable --now nginx
 
+          echo -e "location ~ [^/].php(/|$) {\n    fastcgi_split_path_info ^(.+?\.php)(/.*)$;\n    set \$path_info \$fastcgi_path_info;\n    fastcgi_index index.php;\n    include fastcgi_params;\n    fastcgi_pass ${NlbDns}:9000;\n    fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;\n}\n\n# Deny access to .htaccess files\nlocation ~ /.ht {\n    deny all;\n}\n\nlocation / {\n    index index.php index.html;\n    try_files \$uri \$uri/ /index.php\$uri?\$query_string;\n}" | sudo tee /etc/nginx/default.d/php.conf > /dev/null
 
+          # Mount EFS
+          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${EfsDns}:/ /usr/share/nginx/html
+
+          sudo systemctl restart nginx
 
 
   AutoScalingGroup:
@@ -132,13 +91,13 @@ Resources:
       - LaunchConfiguration
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub ${ProjectName}-autoscaling
+      AutoScalingGroupName: !Sub ${ProjectName}-web-autoscaling
       MinSize: 1
       MaxSize: 1
       DesiredCapacity: 1 
       LaunchConfigurationName: !Sub ${ProjectName}-web-template
       TargetGroupARNs:
-        - !Ref TargetGroup
+        - !ImportValue ALBTargetGroupArn
       VPCZoneIdentifier:
         - !ImportValue WebSubnet1
         - !ImportValue WebSubnet2
